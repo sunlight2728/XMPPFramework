@@ -4,7 +4,22 @@
 #import <libxml/parserInternals.h>
 
 #if TARGET_OS_IPHONE
-  #import "DDXMLPrivate.h"
+
+// These internal functions are ripped out of DDXMLPrivate.h
+// If the function signatures of these methods ever change in KissXML
+// we won't know until there are runtime crashes. Not great.
+
+// This change is needed because DDXMLPrivate.h was made private in the latest
+// release of KissXML to avoid Swift issues with non-modular includes.
+
+@interface DDXMLElement (PrivateAPI)
++ (instancetype)nodeWithElementPrimitive:(xmlNodePtr)node owner:(DDXMLNode *)owner;
+@end
+
+@interface DDXMLNode (PrivateAPI)
++ (void)detachChild:(xmlNodePtr)child andClean:(BOOL)clean andFixNamespaces:(BOOL)fixNamespaces;
+@end
+
 #endif
 
 #if ! __has_feature(objc_arc)
@@ -777,14 +792,14 @@ static void xmpp_xmlEndElement(void *ctx, const xmlChar *localname,
 	
 	dispatch_block_t block = ^{
 		
-		delegate = newDelegate;
+		self->delegate = newDelegate;
 		
 		#if !OS_OBJECT_USE_OBJC
 		if (delegateQueue)
 			dispatch_release(delegateQueue);
 		#endif
 		
-		delegateQueue = newDelegateQueue;
+		self->delegateQueue = newDelegateQueue;
 	};
 	
 	if (dispatch_get_specific(xmppParserQueueTag))
@@ -797,15 +812,15 @@ static void xmpp_xmlEndElement(void *ctx, const xmlChar *localname,
 {
 	dispatch_block_t block = ^{ @autoreleasepool {
 	
-		int result = xmlParseChunk(parserCtxt, (const char *)[data bytes], (int)[data length], 0);
+		int result = xmlParseChunk(self->parserCtxt, (const char *)[data bytes], (int)[data length], 0);
 		
 		if (result == 0)
 		{
-			if (delegateQueue && [delegate respondsToSelector:@selector(xmppParserDidParseData:)])
+			if (self->delegateQueue && [self->delegate respondsToSelector:@selector(xmppParserDidParseData:)])
 			{
-				__strong id theDelegate = delegate;
+				__strong id theDelegate = self->delegate;
 				
-				dispatch_async(delegateQueue, ^{ @autoreleasepool {
+				dispatch_async(self->delegateQueue, ^{ @autoreleasepool {
 					
 					[theDelegate xmppParserDidParseData:self];
 				}});
@@ -813,11 +828,11 @@ static void xmpp_xmlEndElement(void *ctx, const xmlChar *localname,
 		}
 		else
 		{
-			if (delegateQueue && [delegate respondsToSelector:@selector(xmppParser:didFail:)])
+			if (self->delegateQueue && [self->delegate respondsToSelector:@selector(xmppParser:didFail:)])
 			{
 				NSError *error;
 				
-				xmlError *xmlErr = xmlCtxtGetLastError(parserCtxt);
+				xmlError *xmlErr = xmlCtxtGetLastError(self->parserCtxt);
 				
 				if (xmlErr->message)
 				{
@@ -831,9 +846,9 @@ static void xmpp_xmlEndElement(void *ctx, const xmlChar *localname,
 					error = [NSError errorWithDomain:@"libxmlErrorDomain" code:xmlErr->code userInfo:nil];
 				}
 				
-				__strong id theDelegate = delegate;
+				__strong id theDelegate = self->delegate;
 				
-				dispatch_async(delegateQueue, ^{ @autoreleasepool {
+				dispatch_async(self->delegateQueue, ^{ @autoreleasepool {
 					
 					[theDelegate xmppParser:self didFail:error];
 				}});

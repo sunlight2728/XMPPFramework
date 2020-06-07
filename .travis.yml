@@ -1,12 +1,36 @@
-# references:
-# * http://www.objc.io/issue-6/travis-ci.html
-# * https://github.com/supermarin/xcpretty#usage
-
+osx_image: xcode9.3
 language: objective-c
+
+cache:
+  directories:
+  - Carthage
+  - Xcode/Testing-iOS/Pods
+  - Xcode/Testing-macOS/Pods
+
 before_install:
-- gem install cocoapods --no-rdoc --no-ri --no-document --quiet # Since Travis is not always on latest version
-- pod install --project-directory=Xcode/Testing2
+  # - brew update
+  # - brew outdated carthage || brew upgrade carthage
+  - export IOS_SIMULATOR_DESTINATION="platform=iOS Simulator,name=iPhone 8,OS=11.3"
+
 install:
-- gem install xcpretty --no-rdoc --no-ri --no-document --quiet
+  - carthage bootstrap --no-build
+  - cd Xcode
+  - bundle install
+  - bundle exec pod repo update --silent
+  - bundle exec pod install --project-directory=Testing-iOS/
+  - bundle exec pod install --project-directory=Testing-macOS/
+  - cd ../
+
+before_script:
+  - set -o pipefail
+
 script:
-- set -o pipefail && xcodebuild test -workspace Xcode/Testing2/XMPPFrameworkTests.xcworkspace -scheme XMPPFrameworkTests -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 6,OS=8.1' | xcpretty -c
+  - xcodebuild -workspace Xcode/Testing-macOS/XMPPFrameworkTests.xcworkspace -scheme XMPPFrameworkTests -sdk macosx -destination 'platform=OS X,arch=x86_64' test | xcpretty -c
+  - travis_retry xcodebuild -workspace Xcode/Testing-iOS/XMPPFrameworkTests.xcworkspace -scheme XMPPFrameworkTests -sdk iphonesimulator -destination "$IOS_SIMULATOR_DESTINATION" test | xcpretty -c
+  - xcodebuild -workspace Xcode/Testing-macOS/XMPPFrameworkTests.xcworkspace -scheme XMPPFrameworkSwiftTests -sdk macosx -destination 'platform=OS X,arch=x86_64' test | xcpretty -c
+  - travis_retry xcodebuild -workspace Xcode/Testing-iOS/XMPPFrameworkTests.xcworkspace -scheme XMPPFrameworkSwiftTests -sdk iphonesimulator -destination "$IOS_SIMULATOR_DESTINATION" test | xcpretty -c
+
+  - xcodebuild -project XMPPFramework.xcodeproj -scheme "XMPPFramework (tvOS)" -sdk appletvsimulator -arch x86_64 build | xcpretty -c
+  - xcodebuild -project Xcode/Testing-Carthage/XMPPFrameworkTests.xcodeproj -scheme "XMPPFrameworkTests (macOS)" -sdk macosx -arch x86_64 test | xcpretty -c
+  - xcodebuild -project Xcode/Testing-Carthage/XMPPFrameworkSwiftTests.xcodeproj -scheme "XMPPFrameworkTests (macOS)" -sdk macosx -arch x86_64 test | xcpretty -c
+  - travis_retry xcodebuild -project Xcode/Testing-Carthage/XMPPFrameworkTests.xcodeproj -scheme "XMPPFrameworkTests (iOS)" -sdk iphonesimulator -destination "$IOS_SIMULATOR_DESTINATION" test | xcpretty -c
